@@ -18,7 +18,17 @@ g++ main.cpp
 ```
 
 ## To run
+
+### NIM: 
+
 To train nim, run `./a.out nim train`
 If you want to train some certain number, eg 50000, of iterations, run `./a.out nim train 50000`
 
-If you want to play against the AI, run `./a.out nim play`
+If you want to play against the AI, run `./a.out nim play` - note, train before you play
+
+### TIC TAC TOE:
+
+To train tic tac toe, run `./a.out tictactoe train`
+If you want to train some certain number, eg 50000, of iterations, run `./a.out tictactoe train 50000`
+
+If you want to play against the AI, run `./a.out tictactoe play` - note, train before you play

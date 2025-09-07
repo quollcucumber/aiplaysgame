@@ -36,7 +36,11 @@ struct Matrix {
             numbers[i] = 1 - dis(Rand) * 2;
         }
     }
-
+    void resize(int numrowsset, int numcolsset) {
+        numrows = numrowsset;
+        numcolumns = numcolsset;
+        numbers.resize(numrows * numcolumns);
+    }
 };
 ostream& operator<<(ostream &os, const Matrix& m) {
     os<<m.numrows<<' '<<m.numcolumns<<'\n';
@@ -125,10 +129,85 @@ struct nim : public gamestate {
         return  state;
     }
 };
-
+struct tictactoe : public gamestate {
+    int board[9]; // 0 is empty, 1, is player 1, 2 is player2
+    void reset_specific() {
+        for(int i = 0; i < 9; i++) board[i] = 0;
+    }
+    int numberofmoves(){
+        return 9;
+    }
+    bool threeinrow(int val) {
+        if(board[1] == val && board[0] == val && board[2] == val) return true;
+        if(board[4] == val && board[3] == val && board[5] == val) return true;
+        if(board[7] == val && board[6] == val && board[8] == val) return true;
+        if(board[0] == val && board[3] == val && board[6] == val) return true;
+        if(board[1] == val && board[4] == val && board[7] == val) return true;
+        if(board[2] == val && board[5] == val && board[8] == val) return true;
+        if(board[0] == val && board[4] == val && board[8] == val) return true;
+        if(board[2] == val && board[4] == val && board[6] == val) return true;
+        return false;
+    }
+    void domove(int move) {
+        assert(board[move] == 0);
+        if(move> 8 || move < 0) assert(1 == 2);
+        if(turn == player1) {
+            board[move] = 1;
+            turn = player2;
+            if(threeinrow(1)) {
+                whodidwin = p1;
+                turn = gameover;
+            }
+        }else {
+            board[move] = 2;
+            turn = player1;
+            if(threeinrow(2)) {
+                whodidwin = p2;
+                turn = gameover;
+            }
+        }
+        if(!(board[0] ==0 || board[1] ==0 ||board[2] ==0 ||board[3] ==0 ||board[4] ==0 ||board[5] ==0 ||board[6] ==0 ||board[7] ==0 ||board[8] ==0)) {
+            turn = gameover;
+            whodidwin = draw;
+        }
+    }
+    vector<bool> checklegal() {
+        vector<bool> ans;
+        for(int i = 0; i < numberofmoves(); i++) {
+            ans.push_back(board[i] == 0);
+        }
+        return ans;
+    }
+    void printboard() {
+        for(int i = 0; i < 3; i++) {
+            for(int j = 0; j < 3; j++) {
+                if(board[i * 3 + j] == 0) {
+                    cout<<'.';
+                }else  if(board[i * 3 + j] == 1) {
+                    cout<<'O';
+                }else {
+                    cout<<"X";
+                }
+            }
+            cout<<'\n';
+        }
+    }
+    vector<double> makestatevector() {
+        vector<double> state;
+        for(int i : board) {
+            state.push_back(i == 1);
+            state.push_back(i == 2);
+        }
+        return  state;
+    }
+};
 int randmove(gamestate*game){
+    vector<bool> legal = game->checklegal();
+    bool anytrue = false;
+    for(int i : legal) if(i) anytrue = true;
+    if(!anytrue) assert(1 == 2);
     int move = Rand() % game->numberofmoves();
-    while(!game->checklegal()[move]) {
+    while(!legal[move]) {
         move = Rand() % game->numberofmoves();
     }
     return move;
@@ -169,6 +248,8 @@ int humanmove(gamestate *game) {
 gamestate *makethegame() {
     if(gamename == "nim")
         return new nim;
+    if(gamename == "tictactoe")
+        return new tictactoe;
     cout<<"unknown game\n";
     exit(10);
 }
@@ -226,6 +307,9 @@ aidecision aimove2(gamestate *game) {
     vector<double> state = game->makestatevector();
     double sum = 0;
     vector<bool> legal = game->checklegal();
+    bool anytrue = false;
+    for(int i : legal) if(i) anytrue = true;
+    if(!anytrue) assert(1 == 2);
     vector<double> ans = aim.multiply(state);
     for(int i = 0; i < ans.size(); i++) {
         ans[i] = exp(min(ans[i], 5.0));
@@ -233,9 +317,11 @@ aidecision aimove2(gamestate *game) {
     }
     double a = dis(Rand) * sum;
     for(int i = 0; i < ans.size(); i++){
-        if(legal[i]) a -= ans[i];
-        if(a <= 0) {
-            return {state, ans, i};
+        if(legal[i]) {
+            a -= ans[i];
+            if(a <= 0) {
+                return {state, ans, i};
+            }
         }
     }
     assert(1 == 2);
@@ -243,11 +329,11 @@ aidecision aimove2(gamestate *game) {
 int aimove(gamestate *game) {
     return aimove2(game).choice;
 }
-double trainspeed = 0.001;
+double trainspeed = 0.0001;
 void changeweights(aidecision ai, bool good) {
     double change = good ? 1.0: -1.0;
     for(int row = 0; row < aim.numrows; row++) {
-        double rowchange = row == ai.choice ? 1.0 : -0.5;
+        double rowchange = row == ai.choice ? 1.0 : - 1.0 / (aim.numcolumns - 1);
         for(int col = 0; col < aim.numcolumns; col++) {
             double dpdm = ai.gamestate[col] * ai.output[row];
             aim.get(row, col) += rowchange * change * dpdm * trainspeed;
@@ -270,11 +356,13 @@ void aitrain() {
             ai2.push_back(d);
         }
     }
-    for(int i = 0; i < ai1.size(); i++) {
-        changeweights(ai1[i], game->whodidwin== p1);
-    }
-    for(int i = 0; i < ai2.size(); i++) {
-        changeweights(ai2[i], game->whodidwin == p2);
+    if(game->whodidwin != draw) {
+        for(int i = 0; i < ai1.size(); i++) {
+            changeweights(ai1[i], game->whodidwin== p1);
+        }
+        for(int i = 0; i < ai2.size(); i++) {
+            changeweights(ai2[i], game->whodidwin == p2);
+        }
     }
     delete game;
 }
@@ -286,9 +374,6 @@ void roundrobin(vector<aifunction> players, vector<string> playernames) {
             cout<<"Player " << playernames[i] <<" played against player " << playernames[j] <<" and " <<playernames[i]<<" got "<< hundredgames(players[i], players[j])<<" points.\n";
         }
     }
-}
-void playgame() {
-
 }
 int main(int argc,char ** argv){
     // cout<<argc<<'\n';
@@ -302,46 +387,54 @@ int main(int argc,char ** argv){
     filename += gamename;
     filename += ".txt";
 
-    if(gamename == "nim") {
-        if(actionname == "train") {
-            int numrounds = 100000;
-            if(argc == 4) {
-                numrounds = atoi(argv[3]);
-            }
-            aim.makerandom();
-            for(int i  = 0; i < numrounds; i++) aitrain();
-            cout<<"MATRIX: \n";
-            cout<<aim;
-            cout<<'\n';
-            ofstream ofs(filename);
-            ofs << aim;
-            vector<aifunction> ais;
-            ais.push_back(randmove);
+
+    if(actionname == "train") {
+        if(gamename == "tictactoe") {
+            aim.resize(9,18);
+        }
+        int numrounds = 100000;
+        if(argc == 4) {
+            numrounds = atoi(argv[3]);
+        }
+        aim.makerandom();
+        for(int i  = 0; i < numrounds; i++) aitrain();
+        cout<<"MATRIX: \n";
+        cout<<aim;
+        cout<<'\n';
+        ofstream ofs(filename);
+        ofs << aim;
+        vector<aifunction> ais;
+        ais.push_back(randmove);
+        if(gamename=="nim") {
             ais.push_back(optimalnimmove);
             ais.push_back(pestimalnimmove);
-            ais.push_back(aimove);
+        }
+        ais.push_back(aimove);
+        if(gamename == "nim") {
             roundrobin(ais, {"Rand", "Optimistic", "Pesimistic", "HAL9000"});
-
-        }else if(actionname == "play"){
-            ifstream ifs(filename);
-            ifs >> aim;
-            if (!ifs) {
-                cout << "Could not read trained matrix "<<filename;
-                return 1;
-            }
-            whowon result = thegame(aimove, humanmove);
-            if(result == p1) {
-                cout<<"You lost.\n";
-            }else if(result == p2){
-                cout<<"You won. \n";
-            }else {
-                cout<<"You drew. \n";
-            }
         }else {
-            cout<<"Unknown action\n";
+            roundrobin(ais, {"Rand", "HAL9000"});
+        }
+    }else if(actionname == "play"){
+        ifstream ifs(filename);
+        ifs >> aim;
+        if (!ifs) {
+            cout << "Could not read trained matrix "<<filename;
             return 1;
         }
+        whowon result = thegame(aimove, humanmove);
+        if(result == p1) {
+            cout<<"You lost.\n";
+        }else if(result == p2){
+            cout<<"You won. \n";
+        }else {
+            cout<<"You drew. \n";
+        }
+    }else {
+        cout<<"Unknown action\n";
+        return 1;
     }
+
 
     return 0;
 }
