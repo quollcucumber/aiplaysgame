@@ -42,13 +42,30 @@ struct Matrix {
     }
 };
 struct gamestate {
-    int left;
+
     whosturn turn;
     whowon whodidwin;
+    virtual void reset_specific() = 0;
+    virtual int numberofmoves() = 0;
+    virtual void domove(int move) = 0;
+    virtual vector<bool> checklegal() = 0;
     void reset() {
-        left= 21;
+        reset_specific();
         turn = player1;
         whodidwin = draw;
+    }
+    virtual vector<double> makestatevector() = 0;
+
+
+};
+
+struct nim : public gamestate {
+    int left;
+    void reset_specific() {
+        left = 21;
+    }
+    int numberofmoves(){
+        return 3;
     }
     void domove(int move) {
         left -= (move+1);
@@ -66,9 +83,6 @@ struct gamestate {
             }
         }
     }
-    int numberofmoves(){
-        return 3;
-    }
     vector<bool> checklegal() {
         vector<bool> ans;
         for(int i = 0; i < numberofmoves(); i++) {
@@ -80,7 +94,15 @@ struct gamestate {
         }
         return ans;
     }
+    vector<double> makestatevector() {
+        vector<double> state;
+        for(int i = 1; i < 22; i++) {
+            state.push_back(left == i);
+        }
+        return  state;
+    }
 };
+
 int randmove(gamestate*game){
     int move = Rand() % game->numberofmoves();
     while(!game->checklegal()[move]) {
@@ -88,8 +110,9 @@ int randmove(gamestate*game){
     }
     return move;
 }
-int optimalmove(gamestate*game) {
-    int currentposition = game->left % (game->numberofmoves() + 1);
+int optimalnimmove(gamestate*game) {
+    nim *nim_game = (nim*)game;
+    int currentposition = nim_game->left % (game->numberofmoves() + 1);
     if(currentposition == 1) {
         return 0;
     }else {
@@ -104,17 +127,22 @@ int optimalmove(gamestate*game) {
         }
     }
 }
+gamestate *makethegame() {
+    return new nim;
+}
 whowon thegame(int ai1(gamestate *),int ai2(gamestate *)){
-    gamestate game;
-    game.reset();
-    while(game.turn != gameover) {
-        if(game.turn == player1) {
-            game.domove(ai1(&game));
+    gamestate *game = makethegame();
+    game->reset();
+    while(game->turn != gameover) {
+        if(game->turn == player1) {
+            game->domove(ai1(game));
         }else {
-            game.domove(ai2(&game));
+            game->domove(ai2(game));
         }
     }
-    return game.whodidwin;
+    whowon winner = game->whodidwin;
+    delete game;
+    return winner;
 }
 double hundredgames(int ai1(gamestate *), int ai2(gamestate * )) {
     double score = 0; // player 1;
@@ -128,10 +156,11 @@ double hundredgames(int ai1(gamestate *), int ai2(gamestate * )) {
     }
     return score;
 }
-int pestimalmove(gamestate*game) {
-    int currentposition = game->left % (game->numberofmoves() + 1);
+int pestimalnimmove(gamestate*game) {
+    nim *nim_game = (nim*)game;
+    int currentposition = nim_game->left % (game->numberofmoves() + 1);
     if(currentposition == 1) {
-        return min(game->numberofmoves()-1, game->left-1);
+        return min(game->numberofmoves()-1, nim_game->left-1);
     }else {
         currentposition += 4;
         currentposition = currentposition - 2;
@@ -151,10 +180,7 @@ struct aidecision {
     int choice;
 };
 aidecision aimove2(gamestate *game) {
-    vector<double> state;
-    for(int i = 1; i < 22; i++) {
-        state.push_back(game->left == i);
-    }
+    vector<double> state = game->makestatevector();
     double sum = 0;
     vector<bool> legal = game->checklegal();
     vector<double> ans = aim.multiply(state);
@@ -188,25 +214,26 @@ void changeweights(aidecision ai, bool good) {
 void aitrain() {
     vector<aidecision> ai1;
     vector<aidecision> ai2;
-    gamestate game;
-    game.reset();
-    while(game.turn != gameover) {
-        if(game.turn == player1) {
-            aidecision d = aimove2(&game);
-            game.domove(d.choice);
+    gamestate *game = makethegame();
+    game->reset();
+    while(game->turn != gameover) {
+        if(game->turn == player1) {
+            aidecision d = aimove2(game);
+            game->domove(d.choice);
             ai1.push_back(d);
         }else {
-            aidecision d = aimove2(&game);
-            game.domove(d.choice);
+            aidecision d = aimove2(game);
+            game->domove(d.choice);
             ai2.push_back(d);
         }
     }
     for(int i = 0; i < ai1.size(); i++) {
-        changeweights(ai1[i], game.whodidwin== p1);
+        changeweights(ai1[i], game->whodidwin== p1);
     }
     for(int i = 0; i < ai2.size(); i++) {
-        changeweights(ai2[i], game.whodidwin == p2);
+        changeweights(ai2[i], game->whodidwin == p2);
     }
+    delete game;
 }
 typedef int (*aifunction)(gamestate *);
 
@@ -226,8 +253,8 @@ int main(){
     cout<<'\n';
     vector<aifunction> ais;
     ais.push_back(randmove);
-    ais.push_back(optimalmove);
-    ais.push_back(pestimalmove);
+    ais.push_back(optimalnimmove);
+    ais.push_back(pestimalnimmove);
     ais.push_back(aimove);
     roundrobin(ais, {"Rand", "Optimistic", "Pesimistic", "HAL9000"});
     return 0;
