@@ -1,5 +1,6 @@
 #include <bits/stdc++.h>
 using namespace std;
+string gamename;
 enum whosturn {
     player1,player2,gameover
 };
@@ -14,6 +15,9 @@ struct Matrix {
     vector<double> numbers;
     Matrix(int numrows_, int numcolumns_) :numrows{numrows_}, numcolumns{numcolumns_} {numbers.resize(numcolumns * numrows);}
     double &get(int row, int col) {
+        return numbers[col * numrows + row];
+    }
+    double get(int row, int col) const{
         return numbers[col * numrows + row];
     }
     vector<double> multiply(vector<double> &v) {
@@ -32,21 +36,37 @@ struct Matrix {
             numbers[i] = 1 - dis(Rand) * 2;
         }
     }
-    void print() {
-        for(int i = 0; i < numrows; i++) {
-            for(int j = 0; j < numcolumns; j++) {
-                cout<<get(i, j)<<' ';
-            }
-            cout<<'\n';
+
+};
+ostream& operator<<(ostream &os, const Matrix& m) {
+    os<<m.numrows<<' '<<m.numcolumns<<'\n';
+    for(int i = 0; i < m.numrows; i++) {
+        for(int j = 0; j < m.numcolumns; j++) {
+            os<<m.get(i, j)<<' ';
+        }
+        os<<'\n';
+    }
+    return os;
+}
+istream& operator>>(istream &is, Matrix & m) {
+    m.numcolumns=m.numrows=0;
+    m.numbers.clear();
+    is >> m.numrows>> m.numcolumns;
+    m.numbers.resize(m.numrows * m.numcolumns);
+    for(int i = 0; i < m.numrows; i++) {
+        for(int j = 0; j < m.numcolumns; j++) {
+            is>>m.get(i,j);
         }
     }
-};
+    return is;
+}
 struct gamestate {
 
     whosturn turn;
     whowon whodidwin;
     virtual void reset_specific() = 0;
     virtual int numberofmoves() = 0;
+    virtual void printboard() = 0;
     virtual void domove(int move) = 0;
     virtual vector<bool> checklegal() = 0;
     void reset() {
@@ -94,6 +114,9 @@ struct nim : public gamestate {
         }
         return ans;
     }
+    void printboard() {
+        cout<<"Left: "<<left<<'\n';
+    }
     vector<double> makestatevector() {
         vector<double> state;
         for(int i = 1; i < 22; i++) {
@@ -127,8 +150,27 @@ int optimalnimmove(gamestate*game) {
         }
     }
 }
+int humanmove(gamestate *game) {
+    game->printboard();
+    vector<bool> legalmoves = game->checklegal();
+    int move = 0;
+    while(!(move >= 1 && move <= game->numberofmoves() && legalmoves[move-1])) {
+        cout<<"Your move? ( ";
+        for(int i = 0; i < game->numberofmoves(); i++) {
+            if(legalmoves[i]) {
+                cout<<i+1<<' ';
+            }
+        }
+        cout<<")\n";
+        cin >> move;
+    }
+    return move-1;
+}
 gamestate *makethegame() {
-    return new nim;
+    if(gamename == "nim")
+        return new nim;
+    cout<<"unknown game\n";
+    exit(10);
 }
 whowon thegame(int ai1(gamestate *),int ai2(gamestate *)){
     gamestate *game = makethegame();
@@ -144,6 +186,7 @@ whowon thegame(int ai1(gamestate *),int ai2(gamestate *)){
     delete game;
     return winner;
 }
+
 double hundredgames(int ai1(gamestate *), int ai2(gamestate * )) {
     double score = 0; // player 1;
     for(int i = 0; i < 100; i ++) {
@@ -244,18 +287,61 @@ void roundrobin(vector<aifunction> players, vector<string> playernames) {
         }
     }
 }
+void playgame() {
 
-int main(){
-    aim.makerandom();
-    for(int i  = 0; i < 100000; i++) aitrain();
-    cout<<"MATRIX: \n";
-    aim.print();
-    cout<<'\n';
-    vector<aifunction> ais;
-    ais.push_back(randmove);
-    ais.push_back(optimalnimmove);
-    ais.push_back(pestimalnimmove);
-    ais.push_back(aimove);
-    roundrobin(ais, {"Rand", "Optimistic", "Pesimistic", "HAL9000"});
+}
+int main(int argc,char ** argv){
+    // cout<<argc<<'\n';
+    if(argc < 3) {
+        cout<<"Please give two arguments >:(, the first is the name of the game, eg, nim, and the second is the instruction: train, play\n";
+        return argc == 3;
+    }
+    gamename = argv[1];
+    string actionname = argv[2];
+    string filename;
+    filename += gamename;
+    filename += ".txt";
+
+    if(gamename == "nim") {
+        if(actionname == "train") {
+            int numrounds = 100000;
+            if(argc == 4) {
+                numrounds = atoi(argv[3]);
+            }
+            aim.makerandom();
+            for(int i  = 0; i < numrounds; i++) aitrain();
+            cout<<"MATRIX: \n";
+            cout<<aim;
+            cout<<'\n';
+            ofstream ofs(filename);
+            ofs << aim;
+            vector<aifunction> ais;
+            ais.push_back(randmove);
+            ais.push_back(optimalnimmove);
+            ais.push_back(pestimalnimmove);
+            ais.push_back(aimove);
+            roundrobin(ais, {"Rand", "Optimistic", "Pesimistic", "HAL9000"});
+
+        }else if(actionname == "play"){
+            ifstream ifs(filename);
+            ifs >> aim;
+            if (!ifs) {
+                cout << "Could not read trained matrix "<<filename;
+                return 1;
+            }
+            whowon result = thegame(aimove, humanmove);
+            if(result == p1) {
+                cout<<"You lost.\n";
+            }else if(result == p2){
+                cout<<"You won. \n";
+            }else {
+                cout<<"You drew. \n";
+            }
+        }else {
+            cout<<"Unknown action\n";
+            return 1;
+        }
+    }
+
     return 0;
 }
