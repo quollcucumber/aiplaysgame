@@ -10,9 +10,15 @@ I made three example bots.
 My ai is a Matrix, which slowly gets better as it gets trained for longer. The final program prints out the 
 Matrix, followed by the results of a round robin 100 games.
 
-## Too compile
+## To compile
 
 ```bash
 g++ main.cpp
 ./a.out
 ```
+
+## To run
+To train nim, run `./a.out nim train`
+If you want to train some certain number, eg 50000, of iterations, run `./a.out nim train 50000`
+
+If you want to play against the AI, run `./a.out nim play`
