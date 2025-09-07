@@ -194,9 +194,18 @@ struct tictactoe : public gamestate {
     }
     vector<double> makestatevector() {
         vector<double> state;
+        int me;
+        int them;
+        if(turn == player1) {
+            me = 1;
+            them = 2;
+        }else {
+            me = 2;
+            them = 1;
+        }
         for(int i : board) {
-            state.push_back(i == 1);
-            state.push_back(i == 2);
+            state.push_back(i == me);
+            state.push_back(i == them);
         }
         return  state;
     }
